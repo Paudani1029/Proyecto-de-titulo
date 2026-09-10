@@ -51,28 +51,23 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 
   Future<void> _iniciarConexion() async {
-    final exito = await _servicioCamara.conectar();
-    if (exito) {
-      setState(() {
-        _conectada = true;
-        _descripcionActual = 'Cámara conectada. Esperando datos...';
-      });
+  final exito = await _servicioCamara.conectar();
+  if (exito) {
+    setState(() {
+      _conectada = true;
+      _descripcionActual = 'Cámara conectada. Esperando datos...';
+    });
 
-      _suscripcion = _servicioCamara.descripciones.listen((texto) {
-        setState(() {
-          _descripcionActual = texto;
-        });
-      });
-    }
-        _suscripcion = _servicioCamara.descripciones.listen((texto) {
+    _suscripcion = _servicioCamara.descripciones.listen((texto) {
       setState(() {
         _descripcionActual = texto;
       });
 
       if (_escuchando) {
         _voz.hablar(texto);
-      }
-    });
+        }
+      });
+    }
   }
 
   void _alternarEscucha() {
