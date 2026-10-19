@@ -1,0 +1,10 @@
+Detección más precisa y descripción más precisa
+        
+Traducción mejor --> y voz en verdadero español (SLM y TTS local)
+Interfaz: que se abra sola cuando detecte un peligro, mostrando pantalla alerta --> subir volumen
+Botón para mostrar la vista de la cámara
+
+Diseñar BD
+Reconocimiento facial
+
+Algoritmo detección y clasificación de peligros y priorización.
