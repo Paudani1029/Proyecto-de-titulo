@@ -4,9 +4,6 @@ import 'services/phone_camera_service.dart';
 import 'services/voz_service.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'data/lumina_db.dart';
-import 'data/historial_repository.dart';
-import 'dart:io' show Platform;
 
 
 void main() {
