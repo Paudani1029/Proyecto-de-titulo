@@ -1,214 +1,66 @@
-import 'services/camara_service.dart';
-import 'services/phone_camera_service.dart';
-//import 'services/mock_camara_service.dart';
-import 'services/voz_service.dart';
 import 'package:flutter/material.dart';
-import 'dart:async';
 
+import '../test/screens/pantalla_bienvenida.dart';
+import '../test/screens/pantalla_guia.dart';
+import '../test/screens/pantalla_login.dart';
+import '../test/screens/pantalla_principal.dart';
+import '../test/theme/lumina_tema.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const LuminaApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class LuminaApp extends StatelessWidget {
+  const LuminaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Asistencia Visual',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-      ),
-      home: const PantallaPrincipal(),
+    // Se reconstruye cuando el usuario cambia el modo oscuro en Ajustes
+    return ValueListenableBuilder<bool>(
+      valueListenable: modoOscuro,
+      builder: (context, oscuro, _) {
+        return MaterialApp(
+          title: 'Lumina',
+          debugShowCheckedModeBanner: false,
+          theme: construirTema(oscuro: false),
+          darkTheme: construirTema(oscuro: true),
+          themeMode: oscuro ? ThemeMode.dark : ThemeMode.light,
+          home: const _Raiz(),
+        );
+      },
     );
   }
 }
 
-class PantallaPrincipal extends StatefulWidget {
-  const PantallaPrincipal({super.key});
+enum _Etapa { login, bienvenida, guia, principal }
+
+/// Decide qué pantalla mostrar (mismo flujo que el diseño de Figma).
+class _Raiz extends StatefulWidget {
+  const _Raiz();
 
   @override
-  State<PantallaPrincipal> createState() => _PantallaPrincipalState();
+  State<_Raiz> createState() => _RaizState();
 }
 
-/////// 
-///
-class _PantallaPrincipalState extends State<PantallaPrincipal> {
-  bool _escuchando = true;
-  bool _conectada = false;
-  String _descripcionActual = 'Conectando con la cámara...';
+class _RaizState extends State<_Raiz> {
+  _Etapa _etapa = _Etapa.login;
 
-  final VozService _voz = VozService();
-
-  final CameraService _servicioCamara = PhoneCameraService();
-  StreamSubscription<String>? _suscripcion;
+  void _ir(_Etapa etapa) => setState(() => _etapa = etapa);
 
   @override
-  void initState() {
-    super.initState();
-    _iniciarConexion();
+  Widget build(BuildContext context) {
+    return switch (_etapa) {
+      _Etapa.login => PantallaLogin(
+          alIniciarSesion: () => _ir(_Etapa.bienvenida),
+        ),
+      _Etapa.bienvenida => PantallaBienvenida(
+          alContinuar: () => _ir(_Etapa.guia),
+        ),
+      _Etapa.guia => PantallaGuia(
+          alVolver: () => _ir(_Etapa.bienvenida),
+          alTerminar: () => _ir(_Etapa.principal),
+        ),
+      _Etapa.principal => const PantallaPrincipal(),
+    };
   }
-
-  Future<void> _iniciarConexion() async {
-  final exito = await _servicioCamara.conectar();
-  if (exito) {
-    setState(() {
-      _conectada = true;
-      _descripcionActual = 'Cámara conectada. Esperando datos...';
-    });
-
-    _suscripcion = _servicioCamara.descripciones.listen((texto) {
-      setState(() {
-        _descripcionActual = texto;
-      });
-
-      if (_escuchando) {
-        _voz.hablar(texto);
-        }
-      });
-    }
-  }
-
-  void _alternarEscucha() {
-  setState(() {
-    _escuchando = !_escuchando;
-  });
-
-  if (!_escuchando) {
-    _voz.detener();
-  }
-}
-
-  @override
-  void dispose() {
-    _suscripcion?.cancel();
-    _servicioCamara.desconectar();
-    _voz.detener();
-    super.dispose();
-  }
-
-  // solo cambia el Text del recuadro de descripción:
-
-
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: SafeArea(
-      child: Column(
-        children: [
-          if (_conectada)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.camera_alt, size: 16, color: Colors.green.shade700),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Cámara conectada',
-                      style: TextStyle(fontSize: 13, color: Colors.green.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          // Espacio flexible arriba y el círculo central
-          Expanded(
-            child: GestureDetector(
-              onTap: _alternarEscucha,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 70,
-                      backgroundColor: Colors.blue.shade100,
-                      child: Icon(
-                        _escuchando ? Icons.mic : Icons.mic_off,
-                        size: 50,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      _escuchando ? 'Escuchando el entorno' : 'En pausa',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Toca en cualquier parte para pausar',
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Recuadro con la descripción simulada
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.volume_up, size: 18, color: Colors.grey.shade700),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _descripcionActual,
-                      style: const TextStyle(fontSize: 13, color: Colors.black87),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Fila de botones inferiores
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _botonInferior(Icons.pause, 'Pausar'),
-                _botonInferior(Icons.repeat, 'Repetir'),
-                _botonInferior(Icons.help_outline, 'Ayuda'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-// Función auxiliar para no repetir código en cada botón
-Widget _botonInferior(IconData icono, String etiqueta) {
-  return Column(
-    children: [
-      Icon(icono, color: Colors.grey.shade700),
-      const SizedBox(height: 4),
-      Text(
-        etiqueta,
-        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-      ),
-    ],
-  );
- }
 }
