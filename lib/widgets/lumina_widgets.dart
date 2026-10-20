@@ -58,7 +58,7 @@ class ContenedorPantalla extends StatelessWidget {
                 child: ClipRect(
                   child: Stack(
                     children: [
-                      if (decoracion != null) decoracion!,
+                      ?decoracion,
                       Positioned.fill(child: contenido),
                     ],
                   ),

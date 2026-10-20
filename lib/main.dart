@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../test/screens/pantalla_bienvenida.dart';
-import '../test/screens/pantalla_guia.dart';
-import '../test/screens/pantalla_login.dart';
-import '../test/screens/pantalla_principal.dart';
-import '../test/theme/lumina_tema.dart';
+import 'screens/pantalla_bienvenida.dart';
+import 'screens/pantalla_guia.dart';
+import 'screens/pantalla_login.dart';
+import 'screens/pantalla_principal.dart';
+import 'theme/lumina_tema.dart';
 
 void main() {
   runApp(const LuminaApp());
