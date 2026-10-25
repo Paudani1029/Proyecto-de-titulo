@@ -32,9 +32,11 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   flutter_tts: ^4.0.2
-  camera:  0.10.6
+  camera: 0.10.6
   google_mlkit_image_labeling: ^0.16.1
   google_mlkit_translation: ^0.15.1
+  speech_to_text: ^7.0.0
+  ultralytics_yolo: ^0.6.15
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8

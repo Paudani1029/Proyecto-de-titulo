@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/aviso_historial.dart';
 import '../theme/lumina_tema.dart';
 import 'lumina_widgets.dart';
-
-/// Un aviso guardado en el historial.
-class AvisoHistorial {
-  const AvisoHistorial(this.texto, this.hora);
-
-  final String texto;
-  final DateTime hora;
-}
 
 /// Hoja "¿Necesitas ayuda?"
 Future<void> mostrarHojaAyuda(BuildContext context) {
@@ -149,7 +142,7 @@ class _ContenidoAyuda extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Usa estos tres controles en cualquier momento.',
+                      'Toca el círculo y di una de estas frases.',
                       style: estiloTexto(18, FontWeight.w400, c.inkMuted),
                     ),
                   ],
@@ -160,9 +153,11 @@ class _ContenidoAyuda extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _linea(c, 'Pausar:', ' detiene temporalmente la escucha.'),
-          _linea(c, 'Repetir:', ' vuelve a decir el último aviso.'),
-          _linea(c, 'Continuar:', ' reactiva la escucha del entorno.'),
+          _linea(c, '“¿Qué tengo enfrente?”', ' describe lo que ve la cámara.'),
+          _linea(c, '“¿Dónde está la botella?”', ' busca un objeto y dice dónde está.'),
+          _linea(c, '“Guía mi camino”', ' activa el modo guía con avisos de obstáculos.'),
+          _linea(c, '“Para”', ' termina la guía.'),
+          _linea(c, '“Repite”', ' vuelve a decir el último mensaje.'),
           const SizedBox(height: 12),
           BotonPrimario(
             texto: 'Entendido',

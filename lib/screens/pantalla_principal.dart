@@ -3,84 +3,33 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../services/camara_service.dart';
-import '../services/phone_camera_service.dart';
-import '../services/voz_service.dart';
+import '../logica/asistente.dart';
 import '../theme/lumina_tema.dart';
 import '../widgets/hojas.dart';
 import '../widgets/lumina_widgets.dart';
 
 class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({super.key});
- 
+
   @override
   State<PantallaPrincipal> createState() => _PantallaPrincipalState();
 }
 
 class _PantallaPrincipalState extends State<PantallaPrincipal> {
-  // --- Servicios (los mismos que ya tenías) ---
-  final VozService _voz = VozService();
-  final CameraService _servicioCamara = PhoneCameraService();
-  StreamSubscription<String>? _suscripcion;
-
-  // --- Estado de la pantalla ---
-  bool _escuchando = true;
-  bool _errorCamara = false;
-  String _ultimoAviso = 'Conectando con la cámara...';
-  final List<AvisoHistorial> _historial = [];
+  // El "cerebro": cámara, detector, voz y comandos viven en Asistente.
+  final Asistente _asistente = Asistente();
 
   // Se comparte con la hoja de Ajustes
   final ValueNotifier<bool> _camaraVisible = ValueNotifier<bool>(false);
 
-  // Mensaje flotante breve ("Escucha pausada", etc.)
+  // Mensaje flotante breve ("Modo guía activado", etc.)
   String _anuncio = '';
   Timer? _temporizadorAnuncio;
 
   @override
   void initState() {
     super.initState();
-    _iniciarConexion();
-  }
-
-  Future<void> _iniciarConexion() async {
-    final exito = await _servicioCamara.conectar();
-    if (!mounted) return;
-
-    if (!exito) {
-      setState(() {
-        _errorCamara = true;
-        _ultimoAviso = 'No se pudo conectar con la cámara.';
-      });
-      _voz.hablar(_ultimoAviso);
-      return;
-    }
-
-    setState(() {
-      _ultimoAviso = 'Cámara conectada. Esperando datos...';
-    });
-    _suscripcion = _servicioCamara.descripciones.listen(_alRecibirDescripcion);
-  }
-
-  void _alRecibirDescripcion(String texto) {
-    if (!_escuchando || !mounted) return;
-
-    setState(() {
-      _ultimoAviso = texto;
-      _historial.insert(0, AvisoHistorial(texto, DateTime.now()));
-      if (_historial.length > 20) _historial.removeLast();
-    });
-    _voz.hablar(texto);
-  }
-
-  void _alternarEscucha() {
-    setState(() => _escuchando = !_escuchando);
-    if (!_escuchando) _voz.detener();
-    _mostrarAnuncio(_escuchando ? 'Escucha reanudada' : 'Escucha pausada');
-  }
-
-  void _repetir() {
-    _mostrarAnuncio('Repitiendo el último mensaje');
-    _voz.hablar(_ultimoAviso);
+    unawaited(_asistente.iniciar());
   }
 
   void _mostrarAnuncio(String texto) {
@@ -91,13 +40,25 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     });
   }
 
+  void _alternarGuia() {
+    _asistente.alternarGuia();
+    _mostrarAnuncio(
+      _asistente.modoGuia ? 'Modo guía activado' : 'Modo guía desactivado',
+    );
+  }
+
+  void _repetir() {
+    _asistente.repetirUltimo();
+    _mostrarAnuncio('Repitiendo el último mensaje');
+  }
+
   void _abrirAyuda() => mostrarHojaAyuda(context);
 
   void _abrirAjustes() {
     mostrarHojaAjustes(
       context,
       camaraVisible: _camaraVisible,
-      historial: List<AvisoHistorial>.of(_historial),
+      historial: _asistente.historial,
       alActivarCamara: () =>
           _mostrarAnuncio('Cámara visible en la pantalla principal'),
     );
@@ -106,11 +67,61 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   @override
   void dispose() {
     _temporizadorAnuncio?.cancel();
-    _suscripcion?.cancel();
-    _servicioCamara.desconectar();
-    _voz.detener();
+    _asistente.dispose();
     _camaraVisible.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------------
+  // Textos e íconos según lo que está haciendo Lumina
+  // ------------------------------------------------------------------
+
+  ({String titulo, String pista, IconData icono, String etiquetaBoton})
+      _textos(EstadoAsistente e) {
+    switch (e) {
+      case EstadoAsistente.conectando:
+        return (
+          titulo: 'Preparando…',
+          pista: 'Abriendo la cámara',
+          icono: Icons.hourglass_top,
+          etiquetaBoton: 'Lumina se está preparando',
+        );
+      case EstadoAsistente.sinCamara:
+        return (
+          titulo: 'Sin cámara',
+          pista: 'Revisa el permiso de la cámara',
+          icono: Icons.videocam_off,
+          etiquetaBoton: 'La cámara no está disponible',
+        );
+      case EstadoAsistente.atento:
+        return (
+          titulo: 'Toca para hablar',
+          pista: 'Pregúntame: “¿Qué tengo enfrente?”',
+          icono: Icons.mic,
+          etiquetaBoton: 'Toca para hablar con Lumina',
+        );
+      case EstadoAsistente.escuchando:
+        return (
+          titulo: 'Te escucho',
+          pista: 'Habla ahora. Toca de nuevo para cancelar',
+          icono: Icons.mic,
+          etiquetaBoton: 'Cancelar escucha',
+        );
+      case EstadoAsistente.pensando:
+        return (
+          titulo: 'Mirando…',
+          pista: 'Un momento',
+          icono: Icons.visibility,
+          etiquetaBoton: 'Lumina está mirando',
+        );
+      case EstadoAsistente.guiando:
+        return (
+          titulo: 'Modo guía',
+          pista: 'Toca para hablar. Di “para” para terminar',
+          icono: Icons.mic,
+          etiquetaBoton: 'Modo guía activo. Toca para hablar con Lumina',
+        );
+    }
   }
 
   // ------------------------------------------------------------------
@@ -126,9 +137,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: ValueListenableBuilder<bool>(
-              valueListenable: _camaraVisible,
-              builder: (context, camaraVisible, _) {
+            child: ListenableBuilder(
+              listenable: Listenable.merge([_asistente, _camaraVisible]),
+              builder: (context, _) {
+                final camaraVisible = _camaraVisible.value;
                 return Column(
                   children: [
                     _encabezado(c),
@@ -138,8 +150,8 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                         child: Column(
                           children: [
                             if (camaraVisible) _tarjetaCamara(c),
-                            Expanded(child: _botonEscucha(c, camaraVisible)),
-                            _tarjetaUltimoAviso(c),
+                            Expanded(child: _botonHablar(c, camaraVisible)),
+                            _tarjetaUltimoMensaje(c),
                             _barraControles(c),
                           ],
                         ),
@@ -163,6 +175,46 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 
   Widget _encabezado(LuminaColors c) {
+    final estado = _asistente.estado;
+
+    // Valores iniciales (los del estado "atento"); el switch los cambia si hace falta
+    String etiqueta = 'Atento';
+    Color fondo = c.successSoft;
+    Color punto = c.success;
+    Color texto = c.successStrong;
+    switch (estado) {
+      case EstadoAsistente.atento:
+        etiqueta = 'Atento';
+        fondo = c.successSoft;
+        punto = c.success;
+        texto = c.successStrong;
+      case EstadoAsistente.sinCamara:
+        etiqueta = 'Sin cámara';
+        fondo = c.warningSoft;
+        punto = c.warning;
+        texto = c.warningStrong;
+      case EstadoAsistente.escuchando:
+        etiqueta = 'Te escucho';
+        fondo = c.brandPale;
+        punto = c.brand;
+        texto = c.brandStrong;
+      case EstadoAsistente.pensando:
+        etiqueta = 'Mirando';
+        fondo = c.brandPale;
+        punto = c.brand;
+        texto = c.brandStrong;
+      case EstadoAsistente.guiando:
+        etiqueta = 'Guiando';
+        fondo = c.brandPale;
+        punto = c.brand;
+        texto = c.brandStrong;
+      case EstadoAsistente.conectando:
+        etiqueta = 'Preparando';
+        fondo = c.brandPale;
+        punto = c.brand;
+        texto = c.brandStrong;
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
       child: Row(
@@ -179,14 +231,14 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           ),
           const SizedBox(width: 10),
           Text(
-            'Escucha',
+            'Lumina',
             style: estiloTexto(20, FontWeight.w800, c.ink, espaciado: -0.3),
           ),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _escuchando ? c.successSoft : c.warningSoft,
+              color: fondo,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -195,20 +247,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 Container(
                   width: 10,
                   height: 10,
-                  decoration: BoxDecoration(
-                    color: _escuchando ? c.success : c.warning,
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: BoxDecoration(color: punto, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _escuchando ? 'Activo' : 'En pausa',
-                  style: estiloTexto(
-                    14,
-                    FontWeight.w700,
-                    _escuchando ? c.successStrong : c.warningStrong,
-                  ),
-                ),
+                Text(etiqueta, style: estiloTexto(14, FontWeight.w700, texto)),
               ],
             ),
           ),
@@ -238,15 +280,11 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 
   Widget _tarjetaCamara(LuminaColors c) {
-    // Por ahora la vista previa solo existe para la cámara del teléfono.
-    // Cuando llegue la ESP32-S3 habrá que mostrar su imagen de otra forma.
-    final servicio = _servicioCamara;
-    final controlador =
-        servicio is PhoneCameraService ? servicio.controller : null;
+    final controlador = _asistente.controladorCamara;
     final listo = controlador != null && controlador.value.isInitialized;
 
     Widget contenido;
-    if (_errorCamara) {
+    if (_asistente.errorCamara) {
       contenido = _mensajeCamara(
         'No pudimos abrir la cámara. Revisa el permiso de cámara del dispositivo.',
       );
@@ -349,24 +387,26 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  Widget _botonEscucha(LuminaColors c, bool camaraVisible) {
+  Widget _botonHablar(LuminaColors c, bool camaraVisible) {
+    final estado = _asistente.estado;
+    final textos = _textos(estado);
+    final sinCamara = estado == EstadoAsistente.sinCamara;
+
     final tamAnillo = camaraVisible ? 128.0 : 176.0;
     final tamBoton = camaraVisible ? 96.0 : 144.0;
     final tamIcono = camaraVisible ? 44.0 : 64.0;
 
-    // Igual que el CSS: sin anillos si el usuario pidió menos animaciones
-    // o si la pantalla es baja.
+    // Los anillos que "laten" significan: el micrófono está abierto.
+    // Se omiten si el usuario pidió menos animaciones o la pantalla es baja.
     final sinAnimaciones = MediaQuery.disableAnimationsOf(context) ||
         MediaQuery.sizeOf(context).height < 720;
 
     return Semantics(
       button: true,
-      label: _escuchando
-          ? 'Pausar la escucha del entorno'
-          : 'Reanudar la escucha del entorno',
+      label: textos.etiquetaBoton,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _alternarEscucha,
+        onTap: _asistente.tocarCirculo,
         child: Center(
           // FittedBox: si falta espacio, el bloque se achica en vez de desbordarse
           child: FittedBox(
@@ -381,21 +421,22 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        if (_escuchando && !sinAnimaciones)
+                        if (estado == EstadoAsistente.escuchando &&
+                            !sinAnimaciones)
                           AnilloPulso(color: c.brandSoft, tamano: tamAnillo),
                         Container(
                           width: tamBoton,
                           height: tamBoton,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: _escuchando ? c.brand : c.surfaceMuted,
+                            color: sinCamara ? c.surfaceMuted : c.brand,
                             shape: BoxShape.circle,
                             boxShadow: LuminaColors.sombraControl,
                           ),
                           child: Icon(
-                            _escuchando ? Icons.mic : Icons.play_arrow,
+                            textos.icono,
                             size: tamIcono,
-                            color: _escuchando ? c.onBrand : c.inkMuted,
+                            color: sinCamara ? c.inkMuted : c.onBrand,
                           ),
                         ),
                       ],
@@ -403,7 +444,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   ),
                   SizedBox(height: camaraVisible ? 12 : 32),
                   Text(
-                    _escuchando ? 'Escuchando' : 'Escucha pausada',
+                    textos.titulo,
                     textAlign: TextAlign.center,
                     style: estiloTexto(
                       camaraVisible ? 24 : 30,
@@ -416,9 +457,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 320),
                     child: Text(
-                      _escuchando
-                          ? 'Toca el círculo para pausar'
-                          : 'Toca el círculo para continuar',
+                      textos.pista,
                       textAlign: TextAlign.center,
                       style: estiloTexto(
                         18,
@@ -437,7 +476,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  Widget _tarjetaUltimoAviso(LuminaColors c) {
+  Widget _tarjetaUltimoMensaje(LuminaColors c) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
@@ -456,7 +495,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               Icon(Icons.volume_up, size: 20, color: c.brandStrong),
               const SizedBox(width: 8),
               Text(
-                'ÚLTIMO AVISO',
+                'ÚLTIMO MENSAJE',
                 style: estiloTexto(
                   14,
                   FontWeight.w800,
@@ -468,7 +507,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           ),
           const SizedBox(height: 8),
           Text(
-            _ultimoAviso,
+            _asistente.ultimoMensaje,
             style: estiloTexto(18, FontWeight.w600, c.ink, altura: 1.6),
           ),
         ],
@@ -486,10 +525,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         children: [
           Expanded(
             child: BotonAccion(
-              icono: _escuchando ? Icons.pause : Icons.play_arrow,
-              etiqueta: _escuchando ? 'Pausar' : 'Continuar',
-              onTap: _alternarEscucha,
-              activo: !_escuchando,
+              icono: Icons.explore,
+              etiqueta: 'Guía',
+              onTap: _alternarGuia,
+              activo: _asistente.modoGuia,
             ),
           ),
           const SizedBox(width: 8),
