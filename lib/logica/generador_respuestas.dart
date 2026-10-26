@@ -7,14 +7,14 @@ import '../models/deteccion.dart';
 // ---------------------------------------------------------------------------
 
 /// Un objeto "muy cerca" ocupa al menos esta fracción de la altura de la foto.
-const double umbralMuyCerca = 0.45;
+const double umbralMuyCerca = 0.35;
 
 /// Vehículos y animales: alerta si el alto del recuadro supera esto.
 const double umbralVehiculoVigilancia = 0.40;
 const double umbralVehiculoGuia = 0.30;
 
 /// Persona muy cerca (solo en modo guía).
-const double umbralPersonaGuia = 0.60;
+const double umbralPersonaGuia = 0.40;
 
 /// Obstáculo fijo (banca, silla...) adelante (solo en modo guía).
 const double umbralObstaculoGuia = 0.40;
