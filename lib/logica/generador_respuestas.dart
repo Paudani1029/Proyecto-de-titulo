@@ -13,9 +13,21 @@ const double umbralMuyCerca = 0.35;
 const double umbralVehiculoVigilancia = 0.20;
 const double umbralVehiculoGuia = 0.20;
 
+// PERSONAS 
 /// Persona muy cerca (solo en modo guía).
 const double umbralPersonaGuia = 0.40;
 
+// Rel cerca = 0.25
+const double umbralPersonaCerca = 0.25;
+
+// Lejos = 0.2
+const double umbralPersonaLejos = 0.20;
+
+// Muy Lejos = 0.15
+const double umbralPersonaMuyLejos = 0.15;
+
+
+// OBJETOS
 /// Obstáculo fijo (banca, silla...) adelante (solo en modo guía).
 const double umbralObstaculoGuia = 0.40;
 
@@ -194,6 +206,7 @@ List<Alerta> evaluarRiesgos(
       if (enCentro && d.alto >= umbralPersonaGuia) {
         alertas.add(Alerta('person:$pos', 'Persona muy cerca, $pos.'));
       }
+      // AGREGAR MÁS CICLOS IF PARA UMBRALES CERCA, LEJOS Y MUY LEJOS
     } else if (modoGuia && _obstaculosFijos.contains(d.clase)) {
       if (enCentro && d.alto >= umbralObstaculoGuia) {
         alertas.add(Alerta('${d.clase}:$pos', 'Hay $sujeto $pos.'));

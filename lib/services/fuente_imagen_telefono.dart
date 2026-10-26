@@ -22,7 +22,7 @@ class FuenteImagenTelefono implements FuenteImagen {
 
       final controlador = CameraController(
         trasera,
-        ResolutionPreset.medium,
+        ResolutionPreset.veryHigh,
         enableAudio: false,
       );
       await controlador.initialize(); // también pide el permiso de cámara
