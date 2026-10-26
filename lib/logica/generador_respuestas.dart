@@ -10,14 +10,23 @@ import '../models/deteccion.dart';
 const double umbralMuyCerca = 0.35;
 
 /// Vehículos y animales: alerta si el alto del recuadro supera esto.
-const double umbralVehiculoVigilancia = 0.40;
-const double umbralVehiculoGuia = 0.30;
+const double umbralVehiculoVigilancia = 0.20;
+const double umbralVehiculoGuia = 0.20;
 
 /// Persona muy cerca (solo en modo guía).
 const double umbralPersonaGuia = 0.40;
 
 /// Obstáculo fijo (banca, silla...) adelante (solo en modo guía).
 const double umbralObstaculoGuia = 0.40;
+
+// 1.5 metros = 12%
+// 2 metros = 10%
+const double umbralCerca = 0.10;
+
+// 4.5 metros = 6.75%
+// unos 5 metros = 5% aprox
+const double umbralLejos = 0.05; 
+
 
 const Set<String> _vehiculosYAnimales = {
   'car',
@@ -37,6 +46,25 @@ const Set<String> _obstaculosFijos = {
   'fire hydrant',
   'parking meter',
   'dining table',
+  'table',
+  'door',
+  'wall',
+  'window',
+  'stairs',
+  'stair',
+  'trash can',
+  'refrigerator',
+  'oven',
+  'kitchen',
+  'toy',
+  'bike',
+  'ball',
+  'pen', 'pencil',
+  'car', 'toy car',
+  'curb', 'kerb',
+  'food', 'fruit', 'vegetable', 'drink', 'bottle', 'cup', 'glass', 'plate', 'fork', 'knife', 'spoon',
+  'glasses'
+
 };
 
 /// Dónde está algo respecto al usuario.
@@ -55,7 +83,8 @@ String _unir(List<String> partes) {
 }
 
 /// "¿Qué tengo enfrente?"
-String describirEscena(List<Deteccion> detecciones, {int maximo = 4}) {
+/// String describirEscena(List<Deteccion> detecciones, {int maximo = 4}) {
+String describirEscena(List<Deteccion> detecciones) {
   if (detecciones.isEmpty) {
     return 'No detecto objetos conocidos frente a ti.';
   }
@@ -63,11 +92,16 @@ String describirEscena(List<Deteccion> detecciones, {int maximo = 4}) {
   final ordenadas = [...detecciones]..sort((a, b) => b.area.compareTo(a.area));
   final frases = <String>[];
 
-  for (final d in ordenadas.take(maximo)) {
+///  for (final d in ordenadas.take(maximo)) {
+  for (final d in ordenadas) {
     final base = nombresCoco[d.clase]?.conIndefinido ?? d.clase;
     final cerca = d.alto >= umbralMuyCerca ? ' muy cerca' : '';
+    final rel_cerca = d.alto >= umbralCerca ? ' cerca' : '';
+    final lejos = d.alto <= umbralLejos ? ' a lo lejos' : '';
     final pos = posicionTexto(d.centroX);
-    frases.add(pos.isEmpty ? '$base$cerca' : '$base$cerca $pos');
+    frases.add((pos.isEmpty ? '$base$cerca' : '$base$cerca $pos') 
+        + (rel_cerca.isNotEmpty ? rel_cerca : '') 
+        + (lejos.isNotEmpty ? lejos : ''));
   }
 
   // Quita frases repetidas (dos botellas en el mismo lugar)
