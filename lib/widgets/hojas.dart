@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/aviso_historial.dart';
+import '../services/banco_pruebas.dart';
+import '../services/detector_onnx.dart';
 import '../theme/lumina_tema.dart';
 import 'lumina_widgets.dart';
 
@@ -459,7 +461,164 @@ class _ContenidoAjustes extends StatelessWidget {
 
           // Historial
           _tarjetaHistorial(context, c),
+          const SizedBox(height: 16),
+
+          // Comparar modelos de detección (herramienta de desarrollo)
+          const _TarjetaBanco(),
         ],
+      ),
+    );
+  }
+}
+
+/// Banco de pruebas: elegir modelo y acelerador, y ver tiempos y temperatura.
+/// Es una herramienta de desarrollo para comparar modelos en el teléfono real.
+class _TarjetaBanco extends StatelessWidget {
+  const _TarjetaBanco();
+
+  Widget _opcion<T>(
+    LuminaColors c, {
+    required String texto,
+    required T valor,
+    required T actual,
+    required ValueChanged<T> alElegir,
+  }) {
+    final elegido = valor == actual;
+    return Semantics(
+      button: true,
+      selected: elegido,
+      child: Material(
+        color: elegido ? c.brand : c.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => alElegir(valor),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: elegido ? c.brand : c.border),
+            ),
+            child: Text(
+              texto,
+              style: estiloTexto(
+                16,
+                FontWeight.w700,
+                elegido ? c.onBrand : c.ink,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+    final banco = BancoPruebas.instancia;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border),
+      ),
+      child: ValueListenableBuilder<ConfigDeteccion>(
+        valueListenable: configDeteccion,
+        builder: (context, config, _) {
+          void cambiar(ConfigDeteccion nueva) {
+            if (nueva == configDeteccion.value) return;
+            configDeteccion.value = nueva;
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const _IconoCaja(Icons.speed),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Banco de pruebas',
+                          style: estiloTexto(20, FontWeight.w800, c.ink),
+                        ),
+                        Text(
+                          'Compara modelos de detección.',
+                          style: estiloTexto(16, FontWeight.w400, c.inkMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text('Modelo', style: estiloTexto(16, FontWeight.w700, c.inkMuted)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final m in ModeloDeteccion.values)
+                    _opcion<ModeloDeteccion>(
+                      c,
+                      texto: m.nombre,
+                      valor: m,
+                      actual: config.modelo,
+                      alElegir: (v) =>
+                          cambiar(ConfigDeteccion(v, config.acelerador)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('Acelerador',
+                  style: estiloTexto(16, FontWeight.w700, c.inkMuted)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final a in Acelerador.values)
+                    _opcion<Acelerador>(
+                      c,
+                      texto: a.nombre,
+                      valor: a,
+                      actual: config.acelerador,
+                      alElegir: (v) => cambiar(ConfigDeteccion(config.modelo, v)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(height: 1, color: c.border),
+              const SizedBox(height: 16),
+              ValueListenableBuilder<ResumenBanco?>(
+                valueListenable: banco.resumen,
+                builder: (context, r, _) {
+                  return Text(
+                    r?.texto ??
+                        'Sin mediciones todavía. Activa el modo guía y espera '
+                            'unos segundos.',
+                    style: estiloTexto(16, FontWeight.w600, c.ink, altura: 1.5),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: banco.reiniciar,
+                child: Text(
+                  'Reiniciar mediciones',
+                  style: estiloTexto(16, FontWeight.w700, c.brand),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

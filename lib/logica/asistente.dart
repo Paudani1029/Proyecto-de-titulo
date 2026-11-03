@@ -8,7 +8,7 @@ import '../models/aviso_historial.dart';
 import '../models/deteccion.dart';
 import '../services/comandos_voz_service.dart';
 import '../services/detector_objetos.dart';
-import '../services/detector_yolo.dart';
+import '../services/detector_onnx.dart';
 import '../services/fuente_imagen.dart';
 import '../services/fuente_imagen_telefono.dart';
 import '../services/voz_service.dart';
@@ -31,7 +31,7 @@ class Asistente extends ChangeNotifier {
     VozService? voz,
     ComandosVozService? comandos,
   })  : _fuente = fuente ?? FuenteImagenTelefono(),
-        _detector = detector ?? DetectorYolo(),
+        _detector = detector ?? DetectorOnnx(),
         _voz = voz ?? VozService(),
         _comandos = comandos ?? ComandosVozService();
 
@@ -209,8 +209,9 @@ class Asistente extends ChangeNotifier {
       case TipoComando.queHayEnfrente:
         await _responderConFoto(describirEscena);
       case TipoComando.dondeEsta:
-        if (c.clase == null) {
-          // Objeto desconocido o no dicho: se responde sin gastar una foto
+        if (c.clase == null || !_detector.conoce(c.clase!)) {
+          // Objeto desconocido, no dicho o que el modelo actual no sabe detectar:
+          // se responde sin gastar una foto
           _decir(responderBusqueda(
             clase: null,
             objetoPedido: c.objetoPedido,

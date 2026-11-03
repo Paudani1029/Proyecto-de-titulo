@@ -27,7 +27,7 @@ class NombreClase {
   String get conIndefinido => '$indefinido $nombre';
 }
 
-/// Las 80 clases que YOLO conoce (dataset COCO), con su nombre en español.
+/// Las 80 clases del dataset COCO, con su nombre en español.
 const Map<String, NombreClase> nombresCoco = {
   'person': NombreClase('persona', 'la'),
   'bicycle': NombreClase('bicicleta', 'la'),
@@ -110,6 +110,23 @@ const Map<String, NombreClase> nombresCoco = {
   'hair drier': NombreClase('secador de pelo', 'el'),
   'toothbrush': NombreClase('cepillo de dientes', 'el'),
 };
+
+/// Las 80 clases COCO en el ORDEN en que las numeran los modelos de detección
+/// (índice 0 = 'person'). Debe coincidir con las claves de [nombresCoco].
+const List<String> clasesCoco80 = [
+  'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck',
+  'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench',
+  'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra',
+  'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+  'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
+  'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
+  'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
+  'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+  'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse',
+  'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+  'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear',
+  'hair drier', 'toothbrush',
+];
 
 /// Cómo puede llamar el usuario a cada objeto -> clase de YOLO.
 /// Las claves van en minúsculas y SIN tildes (el intérprete normaliza el texto).

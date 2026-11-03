@@ -1,4 +1,4 @@
-import '../models/clases_coco.dart';
+import '../models/catalogo_clases.dart';
 import '../models/deteccion.dart';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,9 @@ const double umbralCerca = 0.10;
 const double umbralLejos = 0.05; 
 
 
+/// Lo que se mueve y puede atropellar o empujar: avisa aunque no esté en modo guía.
 const Set<String> _vehiculosYAnimales = {
+  // COCO
   'car',
   'truck',
   'bus',
@@ -48,35 +50,106 @@ const Set<String> _vehiculosYAnimales = {
   'bicycle',
   'train',
   'dog',
+  'horse',
+  // Objects365
+  'suv',
+  'van',
+  'pickup truck',
+  'sports car',
+  'heavy truck',
+  'fire truck',
+  'ambulance',
+  'machinery vehicle',
+  'formula 1',
+  'scooter',
+  'hoverboard',
+  'tricycle',
+  'rickshaw',
+  'carriage',
+  'crane',
 };
 
+/// Obstáculos para el modo guía. Solo sirven nombres que el modelo activo de
+/// verdad entrega (ver clases_coco.dart y clases_obj365.dart).
+///
+/// Las clases propias de Lumina (escaleras, puertas, soleras...) solo aparecen con
+/// el modelo entrenado en herramientas/entrenamiento/. Con los modelos públicos
+/// nunca llegan, así que tenerlas aquí no cambia nada hasta entonces.
 const Set<String> _obstaculosFijos = {
+  // Propias de Lumina (modelo entrenado)
+  'stairs',
+  'escalator',
+  'door',
+  'curb',
+  'pole',
+  'bollard',
+  'pothole',
+  'manhole',
+  'barrier',
+  'ramp',
+  'scaffolding',
+  'wet floor sign',
+  // Muebles
   'bench',
   'chair',
+  'stool',
   'couch',
-  'potted plant',
+  'dining table',
+  'desk',
+  'coffee table',
+  'side table',
+  'nightstand',
+  'cabinet/shelf',
+  'bed',
+  'piano',
+  // Calle
   'fire hydrant',
   'parking meter',
-  'dining table',
-  'table',
-  'door',
-  'wall',
-  'window',
-  'stairs',
-  'stair',
-  'trash can',
+  'trash bin can',
+  'traffic cone',
+  'street lights',
+  'traffic sign',
+  'stop sign',
+  'speed limit sign',
+  'crosswalk sign',
+  'hurdle',
+  'barrel/bucket',
+  'potted plant',
+  'awning',
+  'tent',
+  // Cosas en el camino
+  'ladder',
+  'wheelchair',
+  'stroller',
+  'trolley',
+  'suitcase',
+  'storage box',
+  'tripod',
+  'swing',
+  'slide',
+  'fan',
+  'radiator',
+  // Cocina y baño
   'refrigerator',
   'oven',
-  'kitchen',
-  'toy',
-  'bike',
-  'ball',
-  'pen', 'pencil',
-  'car', 'toy car',
-  'curb', 'kerb',
-  'food', 'fruit', 'vegetable', 'drink', 'bottle', 'cup', 'glass', 'plate', 'fork', 'knife', 'spoon',
-  'glasses'
-
+  'gas stove',
+  'washing machine/drying machine',
+  'toilet',
+  'sink',
+  'bathtub',
+  // Objetos chicos (solo avisan cuando están muy cerca)
+  'sports ball',
+  'pen/pencil',
+  'bottle',
+  'cup',
+  'wine glass',
+  'plate',
+  'bowl',
+  'fork',
+  'knife',
+  'spoon',
+  'glasses',
+  'teddy bear',
 };
 
 /// Dónde está algo respecto al usuario.
@@ -106,13 +179,15 @@ String describirEscena(List<Deteccion> detecciones) {
 
 ///  for (final d in ordenadas.take(maximo)) {
   for (final d in ordenadas) {
-    final base = nombresCoco[d.clase]?.conIndefinido ?? d.clase;
+    // Zapatillas, cinturones... que lleva puestos alguien: solo meten ruido
+    if (prendasYAccesorios.contains(d.clase)) continue;
+    final base = nombreDeClase(d.clase)?.conIndefinido ?? d.clase;
     final cerca = d.alto >= umbralMuyCerca ? ' muy cerca' : '';
-    final rel_cerca = d.alto >= umbralCerca ? ' cerca' : '';
+    final relCerca = d.alto >= umbralCerca ? ' cerca' : '';
     final lejos = d.alto <= umbralLejos ? ' a lo lejos' : '';
     final pos = posicionTexto(d.centroX);
     frases.add((pos.isEmpty ? '$base$cerca' : '$base$cerca $pos') 
-        + (rel_cerca.isNotEmpty ? rel_cerca : '') 
+        + (relCerca.isNotEmpty ? relCerca : '') 
         + (lejos.isNotEmpty ? lejos : ''));
   }
 
@@ -121,6 +196,7 @@ String describirEscena(List<Deteccion> detecciones) {
   for (final f in frases) {
     if (!unicas.contains(f)) unicas.add(f);
   }
+  if (unicas.isEmpty) return 'No detecto objetos conocidos frente a ti.';
   return 'Veo ${_unir(unicas)}.';
 }
 
@@ -134,7 +210,7 @@ String responderBusqueda({
     return '¿Qué objeto quieres que busque? Por ejemplo: dónde está la botella.';
   }
 
-  final nombre = clase == null ? null : nombresCoco[clase];
+  final nombre = clase == null ? null : nombreDeClase(clase);
   if (clase == null || nombre == null) {
     return 'Todavía no sé buscar $objetoPedido. '
         'Puedo buscar objetos comunes, como botella, silla, celular o taza.';
@@ -187,7 +263,7 @@ List<Alerta> evaluarRiesgos(
     final x = d.centroX;
     if (x == null) continue;
 
-    final nombre = nombresCoco[d.clase];
+    final nombre = nombreDeClase(d.clase);
     final sujeto = nombre?.conIndefinido ?? d.clase;
     final pos = posicionTexto(x);
     final enCentro = x > 0.25 && x < 0.75;

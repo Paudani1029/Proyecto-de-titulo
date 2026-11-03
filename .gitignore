@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Entrenamiento del modelo propio: fotos (pueden tener personas) y modelos entrenados.
+# NO subir al repositorio. Ver herramientas/entrenamiento/README.md
+herramientas/entrenamiento/datos/
+herramientas/entrenamiento/salida/
+*.onnx.crudo.onnx
+__pycache__/

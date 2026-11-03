@@ -36,7 +36,8 @@ dependencies:
   google_mlkit_image_labeling: ^0.16.1
   google_mlkit_translation: ^0.15.1
   speech_to_text: ^7.0.0
-  ultralytics_yolo: ^0.6.15
+  # Detección de objetos offline (ver lib/services/detector_onnx.dart). MIT.
+  flutter_onnxruntime: ^1.9.0
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -62,6 +63,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Modelos de detección (Apache 2.0). Se generan con herramientas/modelos/.
+  assets:
+    - assets/modelos/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

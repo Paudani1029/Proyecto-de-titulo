@@ -1,4 +1,4 @@
-import '../models/clases_coco.dart';
+import '../models/catalogo_clases.dart';
 
 /// Qué quiso decir el usuario.
 enum TipoComando {
@@ -65,13 +65,13 @@ String _quitarActivacion(String t) {
 }
 
 String? _buscarClase(List<String> palabras) {
-  // Primero pares de palabras ("control remoto")
-  for (var i = 0; i < palabras.length - 1; i++) {
-    final par = '${palabras[i]} ${palabras[i + 1]}';
-    if (sinonimosCoco.containsKey(par)) return sinonimosCoco[par];
-  }
-  for (final p in palabras) {
-    if (sinonimosCoco.containsKey(p)) return sinonimosCoco[p];
+  // Primero lo más largo: tríos ("silla de ruedas"), luego pares ("control
+  // remoto") y al final palabras sueltas.
+  for (var largo = 3; largo >= 1; largo--) {
+    for (var i = 0; i + largo <= palabras.length; i++) {
+      final clase = claseDeSinonimo(palabras.sublist(i, i + largo).join(' '));
+      if (clase != null) return clase;
+    }
   }
   return null;
 }
@@ -108,9 +108,12 @@ Comando interpretarComando(String frase) {
         .where((w) => w.isNotEmpty && !_relleno.contains(w))
         .toList();
     if (tokens.isEmpty) return const Comando(TipoComando.dondeEsta);
+    // La clase se busca en la frase COMPLETA (con "de", "la"...), porque hay
+    // nombres que las llevan: "silla de ruedas", "llave de agua".
+    final todas = resto.split(' ').where((w) => w.isNotEmpty).toList();
     return Comando(
       TipoComando.dondeEsta,
-      clase: _buscarClase(tokens),
+      clase: _buscarClase(todas),
       objetoPedido: tokens.join(' '),
     );
   }
