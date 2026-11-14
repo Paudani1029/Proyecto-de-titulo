@@ -47,6 +47,11 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
+  void _terminarBusqueda() {
+    _asistente.detenerBusqueda();
+    _mostrarAnuncio('Búsqueda terminada');
+  }
+
   void _repetir() {
     _asistente.repetirUltimo();
     _mostrarAnuncio('Repitiendo el último mensaje');
@@ -113,6 +118,14 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           pista: 'Un momento',
           icono: Icons.visibility,
           etiquetaBoton: 'Lumina está mirando',
+        );
+      case EstadoAsistente.buscando:
+        final objeto = _asistente.objetoBuscado ?? 'el objeto';
+        return (
+          titulo: 'Buscando',
+          pista: 'Sigue mis indicaciones para encontrar $objeto',
+          icono: Icons.mic,
+          etiquetaBoton: 'Buscando $objeto. Toca para hablar con Lumina',
         );
       case EstadoAsistente.guiando:
         return (
@@ -200,6 +213,11 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         texto = c.brandStrong;
       case EstadoAsistente.pensando:
         etiqueta = 'Mirando';
+        fondo = c.brandPale;
+        punto = c.brand;
+        texto = c.brandStrong;
+      case EstadoAsistente.buscando:
+        etiqueta = 'Buscando';
         fondo = c.brandPale;
         punto = c.brand;
         texto = c.brandStrong;
@@ -524,12 +542,20 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       child: Row(
         children: [
           Expanded(
-            child: BotonAccion(
-              icono: Icons.explore,
-              etiqueta: 'Guía',
-              onTap: _alternarGuia,
-              activo: _asistente.modoGuia,
-            ),
+            // Mientras busca un objeto, este botón sirve para terminar la búsqueda
+            child: _asistente.buscando
+                ? BotonAccion(
+                    icono: Icons.search_off,
+                    etiqueta: 'Terminar',
+                    onTap: _terminarBusqueda,
+                    activo: true,
+                  )
+                : BotonAccion(
+                    icono: Icons.explore,
+                    etiqueta: 'Guía',
+                    onTap: _alternarGuia,
+                    activo: _asistente.modoGuia,
+                  ),
           ),
           const SizedBox(width: 8),
           Expanded(

@@ -11,12 +11,22 @@ import '../services/detector_objetos.dart';
 import '../services/detector_onnx.dart';
 import '../services/fuente_imagen.dart';
 import '../services/fuente_imagen_telefono.dart';
+import '../services/pulso_proximidad.dart';
 import '../services/voz_service.dart';
 import 'generador_respuestas.dart';
+import 'guia_busqueda.dart';
 import 'interprete_comandos.dart';
 
 /// Lo que la pantalla necesita saber para dibujarse.
-enum EstadoAsistente { conectando, sinCamara, atento, escuchando, pensando, guiando }
+enum EstadoAsistente {
+  conectando,
+  sinCamara,
+  atento,
+  escuchando,
+  pensando,
+  buscando,
+  guiando,
+}
 
 /// Cerebro de Lumina.
 ///
@@ -30,7 +40,9 @@ class Asistente extends ChangeNotifier {
     DetectorObjetos? detector,
     VozService? voz,
     ComandosVozService? comandos,
+    PulsoProximidad? pulso,
   })  : _fuente = fuente ?? FuenteImagenTelefono(),
+        _pulso = pulso ?? PulsoProximidad(),
         _detector = detector ?? DetectorOnnx(),
         _voz = voz ?? VozService(),
         _comandos = comandos ?? ComandosVozService();
@@ -39,6 +51,7 @@ class Asistente extends ChangeNotifier {
   final DetectorObjetos _detector;
   final VozService _voz;
   final ComandosVozService _comandos;
+  final PulsoProximidad _pulso;
 
   // --- Estado visible ---
   bool _camaraLista = false;
@@ -46,11 +59,16 @@ class Asistente extends ChangeNotifier {
   bool _escuchando = false; // el micrófono está abierto
   bool _pensando = false; // analizando una foto para responder
   bool _modoGuia = false;
+  GuiaBusqueda? _busqueda; // no es null mientras guía hacia un objeto
   String _ultimoMensaje = 'Toca el círculo y pregúntame algo.';
   final List<AvisoHistorial> _historial = [];
 
   bool get errorCamara => _errorCamara;
   bool get modoGuia => _modoGuia;
+  bool get buscando => _busqueda != null;
+
+  /// Nombre de lo que se está buscando ("la botella"), o null.
+  String? get objetoBuscado => _busqueda?.nombre.conArticulo;
   String get ultimoMensaje => _ultimoMensaje;
   List<AvisoHistorial> get historial => List.unmodifiable(_historial);
 
@@ -59,6 +77,7 @@ class Asistente extends ChangeNotifier {
     if (!_camaraLista) return EstadoAsistente.conectando;
     if (_escuchando) return EstadoAsistente.escuchando;
     if (_pensando) return EstadoAsistente.pensando;
+    if (_busqueda != null) return EstadoAsistente.buscando;
     if (_modoGuia) return EstadoAsistente.guiando;
     return EstadoAsistente.atento;
   }
@@ -84,6 +103,7 @@ class Asistente extends ChangeNotifier {
   @override
   void dispose() {
     _activo = false;
+    unawaited(_pulso.liberar());
     _comandos.liberar();
     _fuente.desconectar();
     _detector.liberar();
@@ -182,6 +202,7 @@ class Asistente extends ChangeNotifier {
     }
 
     await _voz.detener(); // que no se escuche a sí misma
+    _pulso.detener(); // ni los pitidos; vuelven con la próxima foto
     _cancelado = false;
     _escuchando = true;
     _notificar();
@@ -218,16 +239,17 @@ class Asistente extends ChangeNotifier {
             detecciones: const [],
           ));
         } else {
-          await _responderConFoto((dets) => responderBusqueda(
-                clase: c.clase,
-                objetoPedido: c.objetoPedido,
-                detecciones: dets,
-              ));
+          _iniciarBusqueda(c.clase!);
         }
       case TipoComando.guiarCamino:
         _activarGuia();
       case TipoComando.detenerGuia:
-        _desactivarGuia();
+        // "Para" corta primero la búsqueda; si no había, la guía de camino
+        if (_busqueda != null) {
+          detenerBusqueda();
+        } else {
+          _desactivarGuia();
+        }
       case TipoComando.repetir:
         repetirUltimo();
       case TipoComando.ayuda:
@@ -254,6 +276,48 @@ class Asistente extends ChangeNotifier {
       return;
     }
     _decir(armarRespuesta(detecciones));
+  }
+
+  // ------------------------------------------------------------------
+  // Guía para encontrar un objeto ("¿dónde está la botella?")
+  // ------------------------------------------------------------------
+
+  void _iniciarBusqueda(String clase) {
+    // Una búsqueda nueva reemplaza a la anterior
+    final guia = GuiaBusqueda(clase: clase, inicio: DateTime.now());
+    _busqueda = guia;
+    _pulso.detener();
+    _decir(guia.mensajeInicial);
+  }
+
+  /// Termina la búsqueda (comando "para" o botón de la pantalla).
+  void detenerBusqueda() {
+    if (_busqueda == null) return;
+    _busqueda = null;
+    _pulso.detener();
+    _decir('Búsqueda terminada.');
+  }
+
+  void _avanzarBusqueda(List<Deteccion> detecciones) {
+    final guia = _busqueda;
+    if (guia == null) return;
+
+    final paso = guia.procesar(detecciones, DateTime.now());
+    if (paso.terminada) {
+      _busqueda = null;
+      if (guia.encontrado) {
+        unawaited(_pulso.exito());
+      } else {
+        _pulso.detener();
+      }
+    } else {
+      _pulso.actualizar(guia.senal);
+    }
+    if (paso.mensaje != null) {
+      _decir(paso.mensaje!);
+    } else if (paso.terminada) {
+      _notificar();
+    }
   }
 
   // ------------------------------------------------------------------
@@ -291,19 +355,37 @@ class Asistente extends ChangeNotifier {
   Future<void> _bucleVigilancia() async {
     while (_activo) {
       try {
-        if (!_pensando) await _revisarPeligros();
+        if (!_pensando) await _revisarEscena();
       } catch (e) {
         debugPrint('Vigilancia: $e');
       }
-      await Future<void>.delayed(
-        Duration(milliseconds: _modoGuia ? 400 : 1200),
-      );
+      final pausa = _busqueda != null
+          ? 250
+          : _modoGuia
+              ? 400
+              : 1200;
+      await Future<void>.delayed(Duration(milliseconds: pausa));
     }
   }
 
-  Future<void> _revisarPeligros() async {
+  /// Una sola foto sirve para los peligros y para la búsqueda.
+  Future<void> _revisarEscena() async {
     final detecciones = await _analizar();
     if (detecciones == null || !_activo) return;
+
+    // La seguridad va primero: si hubo aviso de peligro, esta foto no guía
+    final avisoPeligro = await _revisarPeligros(detecciones);
+
+    // Mientras el usuario habla no se le dan instrucciones (el micrófono las oiría)
+    if (!avisoPeligro && !_escuchando && !_pensando) {
+      _avanzarBusqueda(detecciones);
+    } else if (_escuchando) {
+      _pulso.detener();
+    }
+  }
+
+  /// Devuelve true si dijo un aviso de peligro.
+  Future<bool> _revisarPeligros(List<Deteccion> detecciones) async {
 
     final alertas = evaluarRiesgos(detecciones, modoGuia: _modoGuia);
     final ahora = DateTime.now();
@@ -328,6 +410,7 @@ class Asistente extends ChangeNotifier {
         await _comandos.cancelar();
       }
       _decir(nuevas.take(2).map((a) => a.mensaje).join(' '));
+      return true;
     } else if (alertas.isNotEmpty) {
       _libres = 0; // el peligro sigue ahí, pero ya se avisó
     } else {
@@ -335,7 +418,9 @@ class Asistente extends ChangeNotifier {
       if (_modoGuia && _huboAlerta && _libres >= 2) {
         _huboAlerta = false;
         _decir('El frente está libre de obstáculos conocidos.');
+        return true;
       }
     }
+    return false;
   }
 }

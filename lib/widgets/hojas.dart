@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/aviso_historial.dart';
 import '../services/banco_pruebas.dart';
 import '../services/detector_onnx.dart';
+import '../services/pulso_proximidad.dart';
 import '../theme/lumina_tema.dart';
 import 'lumina_widgets.dart';
 
@@ -453,6 +454,43 @@ class _ContenidoAjustes extends StatelessWidget {
                       camaraVisible.value = false;
                     }
                   },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Vibración al buscar
+          _TarjetaAjuste(
+            icono: Icons.vibration,
+            titulo: 'Vibrar al buscar',
+            descripcion: 'Vibra más rápido mientras más cerca estés del objeto.',
+            interruptor: ValueListenableBuilder<bool>(
+              valueListenable: vibracionBusqueda,
+              builder: (context, activo, _) {
+                return LuminaToggle(
+                  activo: activo,
+                  etiqueta: 'Vibrar al buscar un objeto',
+                  onCambio: () => vibracionBusqueda.value = !activo,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Pitido al buscar
+          _TarjetaAjuste(
+            icono: Icons.graphic_eq,
+            titulo: 'Pitido al buscar',
+            descripcion: 'Suena más rápido al acercarte. '
+                'Agudo si está al frente, grave si está a un lado.',
+            interruptor: ValueListenableBuilder<bool>(
+              valueListenable: pitidoBusqueda,
+              builder: (context, activo, _) {
+                return LuminaToggle(
+                  activo: activo,
+                  etiqueta: 'Pitido al buscar un objeto',
+                  onCambio: () => pitidoBusqueda.value = !activo,
                 );
               },
             ),
