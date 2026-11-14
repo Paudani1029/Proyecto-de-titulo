@@ -1,23 +1,39 @@
 import 'package:flutter/material.dart';
 
+import '../logica/validaciones.dart';
 import '../theme/lumina_tema.dart';
+import '../widgets/cuentas_externas.dart';
 import '../widgets/lumina_widgets.dart';
 
 class PantallaLogin extends StatefulWidget {
-  const PantallaLogin({super.key, required this.alIniciarSesion});
+  const PantallaLogin({
+    super.key,
+    required this.alIniciarSesion,
+    required this.alIrARegistro,
+    required this.alUsarCuentaExterna,
+  });
 
   final VoidCallback alIniciarSesion;
+  final VoidCallback alIrARegistro;
+  final ValueChanged<ProveedorCuenta> alUsarCuentaExterna;
 
   @override
   State<PantallaLogin> createState() => _PantallaLoginState();
 }
- 
+
 class _PantallaLoginState extends State<PantallaLogin> {
   final TextEditingController _correo = TextEditingController();
   final TextEditingController _clave = TextEditingController();
 
+  // Los errores solo se muestran después de presionar "Iniciar sesión",
+  // para no regañar al usuario mientras todavía está escribiendo.
+  bool _intentoEnviar = false;
+
   bool get _completo =>
       _correo.text.trim().isNotEmpty && _clave.text.isNotEmpty;
+
+  String? get _errorCorreo => validarCorreo(_correo.text);
+  String? get _errorClave => validarClave(_clave.text);
 
   @override
   void dispose() {
@@ -26,55 +42,13 @@ class _PantallaLoginState extends State<PantallaLogin> {
     super.dispose();
   }
 
-  // Por ahora solo avanza si ambos campos tienen texto (igual que el diseño).
+  // Solo avanza si el correo tiene formato válido y la contraseña el largo mínimo.
   // Aquí es donde más adelante se conectaría la autenticación real.
   void _enviar() {
-    if (_completo) widget.alIniciarSesion();
-  }
-
-  Widget _campo({
-    required LuminaColors c,
-    required String etiqueta,
-    required TextEditingController controlador,
-    required String pista,
-    bool oculto = false,
-    TextInputType? teclado,
-    Iterable<String>? autocompletar,
-  }) {
-    final borde = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: c.border, width: 2),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(etiqueta, style: estiloTexto(18, FontWeight.w800, c.ink)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controlador,
-          obscureText: oculto,
-          keyboardType: teclado,
-          autofillHints: autocompletar,
-          onChanged: (_) => setState(() {}),
-          style: estiloTexto(18, FontWeight.w600, c.ink),
-          decoration: InputDecoration(
-            hintText: pista,
-            hintStyle: estiloTexto(18, FontWeight.w600, c.inkMuted),
-            filled: true,
-            fillColor: c.surface,
-            constraints: const BoxConstraints(minHeight: 64),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            border: borde,
-            enabledBorder: borde,
-            focusedBorder: borde.copyWith(
-              borderSide: BorderSide(color: c.brand, width: 2),
-            ),
-          ),
-        ),
-      ],
-    );
+    setState(() => _intentoEnviar = true);
+    if (_completo && _errorCorreo == null && _errorClave == null) {
+      widget.alIniciarSesion();
+    }
   }
 
   @override
@@ -115,22 +89,26 @@ class _PantallaLoginState extends State<PantallaLogin> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  _campo(
-                    c: c,
+                  CampoLumina(
                     etiqueta: 'Correo electrónico',
                     controlador: _correo,
                     pista: 'nombre@correo.com',
                     teclado: TextInputType.emailAddress,
                     autocompletar: const [AutofillHints.email],
+                    accionTeclado: TextInputAction.next,
+                    error: _intentoEnviar ? _errorCorreo : null,
+                    alCambiar: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 20),
-                  _campo(
-                    c: c,
+                  CampoLumina(
                     etiqueta: 'Contraseña',
                     controlador: _clave,
                     pista: 'Escribe tu contraseña',
                     oculto: true,
                     autocompletar: const [AutofillHints.password],
+                    accionTeclado: TextInputAction.done,
+                    error: _intentoEnviar ? _errorClave : null,
+                    alCambiar: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 20),
                   BotonPrimario(
@@ -140,25 +118,32 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
+                    child: EnlaceLumina(
+                      texto: '¿Olvidaste tu contraseña?',
                       onPressed: () {},
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        foregroundColor: c.brandStrong,
-                      ),
-                      child: Text(
-                        '¿Olvidaste tu contraseña?',
-                        style: estiloTexto(
-                          18,
-                          FontWeight.w700,
-                          c.brandStrong,
-                        ).copyWith(
-                          decoration: TextDecoration.underline,
-                          decorationThickness: 2,
-                        ),
-                      ),
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  const SeparadorTexto(texto: 'o continúa con'),
+                  const SizedBox(height: 20),
+                  BotonesCuentaExterna(
+                    accion: 'Iniciar sesión',
+                    alElegir: widget.alUsarCuentaExterna,
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '¿No tienes cuenta?',
+                        style: estiloTexto(18, FontWeight.w600, c.inkMuted),
+                      ),
+                      const SizedBox(width: 4),
+                      EnlaceLumina(
+                        texto: 'Regístrate',
+                        onPressed: widget.alIrARegistro,
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -4,7 +4,9 @@ import 'screens/pantalla_bienvenida.dart';
 import 'screens/pantalla_guia.dart';
 import 'screens/pantalla_login.dart';
 import 'screens/pantalla_principal.dart';
+import 'screens/pantalla_registro.dart';
 import 'theme/lumina_tema.dart';
+import 'widgets/cuentas_externas.dart';
 
 void main() {
   runApp(const LuminaApp());
@@ -32,7 +34,7 @@ class LuminaApp extends StatelessWidget {
   }
 }
 
-enum _Etapa { login, bienvenida, guia, principal }
+enum _Etapa { login, registro, bienvenida, guia, principal }
 
 /// Decide qué pantalla mostrar (mismo flujo que el diseño de Figma).
 class _Raiz extends StatefulWidget {
@@ -47,11 +49,23 @@ class _RaizState extends State<_Raiz> {
 
   void _ir(_Etapa etapa) => setState(() => _etapa = etapa);
 
+  // Por ahora Google y Correo solo simulan el ingreso (igual que el formulario).
+  // Aquí se conectaría la autenticación real, p. ej. con los paquetes
+  // google_sign_in y firebase_auth (Google) o msal / OAuth de Microsoft (Outlook).
+  void _usarCuentaExterna(ProveedorCuenta proveedor) => _ir(_Etapa.bienvenida);
+
   @override
   Widget build(BuildContext context) {
     return switch (_etapa) {
       _Etapa.login => PantallaLogin(
           alIniciarSesion: () => _ir(_Etapa.bienvenida),
+          alIrARegistro: () => _ir(_Etapa.registro),
+          alUsarCuentaExterna: _usarCuentaExterna,
+        ),
+      _Etapa.registro => PantallaRegistro(
+          alRegistrarse: () => _ir(_Etapa.bienvenida),
+          alIrALogin: () => _ir(_Etapa.login),
+          alUsarCuentaExterna: _usarCuentaExterna,
         ),
       _Etapa.bienvenida => PantallaBienvenida(
           alContinuar: () => _ir(_Etapa.guia),

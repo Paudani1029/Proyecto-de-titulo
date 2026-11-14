@@ -365,3 +365,145 @@ class _AnilloPulsoState extends State<AnilloPulso>
     );
   }
 }
+
+/// Campo de texto grande con su etiqueta arriba (login y registro).
+/// Si [oculto] es true, muestra un botón de ojo para ver la contraseña.
+/// Si [error] tiene texto, el borde se pone rojo y se lee el mensaje.
+class CampoLumina extends StatefulWidget {
+  const CampoLumina({
+    super.key,
+    required this.etiqueta,
+    required this.controlador,
+    required this.pista,
+    this.oculto = false,
+    this.teclado,
+    this.autocompletar,
+    this.accionTeclado,
+    this.capitalizacion = TextCapitalization.none,
+    this.error,
+    this.alCambiar,
+  });
+
+  final String etiqueta;
+  final TextEditingController controlador;
+  final String pista;
+  final bool oculto;
+  final TextInputType? teclado;
+  final Iterable<String>? autocompletar;
+  final TextInputAction? accionTeclado;
+  final TextCapitalization capitalizacion;
+  final String? error;
+  final ValueChanged<String>? alCambiar;
+
+  @override
+  State<CampoLumina> createState() => _CampoLuminaState();
+}
+
+class _CampoLuminaState extends State<CampoLumina> {
+  late bool _ocultar = widget.oculto;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+    final colorError = Theme.of(context).colorScheme.error;
+    final hayError = widget.error != null;
+
+    OutlineInputBorder borde(Color color) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: color, width: 2),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.etiqueta, style: estiloTexto(18, FontWeight.w800, c.ink)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: widget.controlador,
+          obscureText: _ocultar,
+          keyboardType: widget.teclado,
+          autofillHints: widget.autocompletar,
+          textInputAction: widget.accionTeclado,
+          textCapitalization: widget.capitalizacion,
+          onChanged: widget.alCambiar,
+          style: estiloTexto(18, FontWeight.w600, c.ink),
+          decoration: InputDecoration(
+            hintText: widget.pista,
+            hintStyle: estiloTexto(18, FontWeight.w600, c.inkMuted),
+            filled: true,
+            fillColor: c.surface,
+            constraints: const BoxConstraints(minHeight: 64),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            border: borde(c.border),
+            enabledBorder: borde(hayError ? colorError : c.border),
+            focusedBorder: borde(hayError ? colorError : c.brand),
+            suffixIcon: widget.oculto
+                ? IconButton(
+                    iconSize: 28,
+                    constraints:
+                        const BoxConstraints(minWidth: 56, minHeight: 56),
+                    color: c.inkMuted,
+                    tooltip:
+                        _ocultar ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                    icon: Icon(
+                      _ocultar ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () => setState(() => _ocultar = !_ocultar),
+                  )
+                : null,
+          ),
+        ),
+        if (hayError) ...[
+          const SizedBox(height: 8),
+          Semantics(
+            liveRegion: true,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error, size: 22, color: colorError),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.error!,
+                    style: estiloTexto(16, FontWeight.w700, colorError,
+                        altura: 1.3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Enlace de texto subrayado (p. ej. "¿Olvidaste tu contraseña?").
+class EnlaceLumina extends StatelessWidget {
+  const EnlaceLumina({super.key, required this.texto, required this.onPressed});
+
+  final String texto;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        foregroundColor: c.brandStrong,
+      ),
+      child: Text(
+        texto,
+        style: estiloTexto(18, FontWeight.w700, c.brandStrong).copyWith(
+          decoration: TextDecoration.underline,
+          decorationThickness: 2,
+        ),
+      ),
+    );
+  }
+}
