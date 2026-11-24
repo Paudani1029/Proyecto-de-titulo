@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../logica/validaciones.dart';
+import '../services/cuenta_service.dart';
 import '../theme/lumina_tema.dart';
 import '../widgets/cuentas_externas.dart';
 import '../widgets/lumina_widgets.dart';
 
+/// Al entrar, no navega por sí misma: la raíz de la app escucha el cambio
+/// de sesión de Supabase y pasa a la siguiente pantalla.
 class PantallaLogin extends StatefulWidget {
-  const PantallaLogin({
-    super.key,
-    required this.alIniciarSesion,
-    required this.alIrARegistro,
-    required this.alUsarCuentaExterna,
-  });
+  const PantallaLogin({super.key, required this.alIrARegistro});
 
-  final VoidCallback alIniciarSesion;
   final VoidCallback alIrARegistro;
-  final ValueChanged<ProveedorCuenta> alUsarCuentaExterna;
 
   @override
   State<PantallaLogin> createState() => _PantallaLoginState();
@@ -28,6 +24,8 @@ class _PantallaLoginState extends State<PantallaLogin> {
   // Los errores solo se muestran después de presionar "Iniciar sesión",
   // para no regañar al usuario mientras todavía está escribiendo.
   bool _intentoEnviar = false;
+  bool _cargando = false;
+  String? _errorServidor;
 
   bool get _completo =>
       _correo.text.trim().isNotEmpty && _clave.text.isNotEmpty;
@@ -42,12 +40,36 @@ class _PantallaLoginState extends State<PantallaLogin> {
     super.dispose();
   }
 
-  // Solo avanza si el correo tiene formato válido y la contraseña el largo mínimo.
-  // Aquí es donde más adelante se conectaría la autenticación real.
-  void _enviar() {
-    setState(() => _intentoEnviar = true);
-    if (_completo && _errorCorreo == null && _errorClave == null) {
-      widget.alIniciarSesion();
+  // Solo consulta al servidor si el correo y la contraseña tienen buen formato.
+  Future<void> _enviar() async {
+    setState(() {
+      _intentoEnviar = true;
+      _errorServidor = null;
+    });
+    if (!_completo || _errorCorreo != null || _errorClave != null) return;
+
+    await _conCarga(
+      () => CuentaService.iniciarSesion(
+        correo: _correo.text,
+        clave: _clave.text,
+      ),
+    );
+  }
+
+  Future<void> _usarCuentaExterna(ProveedorCuenta proveedor) =>
+      _conCarga(() => CuentaService.iniciarConProveedor(proveedor));
+
+  Future<void> _conCarga(Future<void> Function() accion) async {
+    setState(() {
+      _cargando = true;
+      _errorServidor = null;
+    });
+    try {
+      await accion();
+    } on ErrorCuenta catch (e) {
+      if (mounted) setState(() => _errorServidor = e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
@@ -110,10 +132,14 @@ class _PantallaLoginState extends State<PantallaLogin> {
                     error: _intentoEnviar ? _errorClave : null,
                     alCambiar: (_) => setState(() {}),
                   ),
+                  if (_errorServidor != null) ...[
+                    const SizedBox(height: 20),
+                    MensajeFormulario(texto: _errorServidor!),
+                  ],
                   const SizedBox(height: 20),
                   BotonPrimario(
-                    texto: 'Iniciar sesión',
-                    onPressed: _completo ? _enviar : null,
+                    texto: _cargando ? 'Entrando…' : 'Iniciar sesión',
+                    onPressed: _completo && !_cargando ? _enviar : null,
                   ),
                   const SizedBox(height: 12),
                   Align(
@@ -128,7 +154,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   const SizedBox(height: 20),
                   BotonesCuentaExterna(
                     accion: 'Iniciar sesión',
-                    alElegir: widget.alUsarCuentaExterna,
+                    alElegir: _usarCuentaExterna,
                   ),
                   const SizedBox(height: 24),
                   Wrap(

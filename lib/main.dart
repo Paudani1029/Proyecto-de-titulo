@@ -1,14 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/pantalla_bienvenida.dart';
 import 'screens/pantalla_guia.dart';
 import 'screens/pantalla_login.dart';
 import 'screens/pantalla_principal.dart';
 import 'screens/pantalla_registro.dart';
+import 'services/cuenta_service.dart';
+import 'services/preferencias_service.dart';
 import 'theme/lumina_tema.dart';
-import 'widgets/cuentas_externas.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // La clave "publishable" es pública por diseño: la seguridad de los datos
+  // la ponen las políticas RLS de la base. La clave "secret" NUNCA va aquí.
+  await Supabase.initialize(
+    url: 'https://evmfhovwvwptrowmdzqw.supabase.co',
+    publishableKey: 'sb_publishable_LsG9BEZWOCqo39wqG3sxqw_W6SazSif',
+  );
+
+  // Si ya había una sesión guardada, trae sus ajustes sin bloquear el inicio.
+  unawaited(PreferenciasService.cargar());
+
   runApp(const LuminaApp());
 }
 
@@ -45,27 +61,51 @@ class _Raiz extends StatefulWidget {
 }
 
 class _RaizState extends State<_Raiz> {
-  _Etapa _etapa = _Etapa.login;
+  // Con sesión guardada se entra directo; si no, se parte en el login.
+  _Etapa _etapa =
+      CuentaService.sesion != null ? _Etapa.principal : _Etapa.login;
 
-  void _ir(_Etapa etapa) => setState(() => _etapa = etapa);
+  late final StreamSubscription<AuthState> _suscripcion;
 
-  // Por ahora Google y Correo solo simulan el ingreso (igual que el formulario).
-  // Aquí se conectaría la autenticación real, p. ej. con los paquetes
-  // google_sign_in y firebase_auth (Google) o msal / OAuth de Microsoft (Outlook).
-  void _usarCuentaExterna(ProveedorCuenta proveedor) => _ir(_Etapa.bienvenida);
+  @override
+  void initState() {
+    super.initState();
+    // Un solo lugar decide la navegación según la sesión: sirve igual para
+    // correo y contraseña, Google/Outlook (que vuelven desde el navegador) y
+    // el enlace de confirmación del correo.
+    _suscripcion = CuentaService.cambios.listen((estado) {
+      switch (estado.event) {
+        case AuthChangeEvent.signedIn:
+          if (_etapa == _Etapa.login || _etapa == _Etapa.registro) {
+            _ir(_Etapa.bienvenida);
+            PreferenciasService.cargar();
+          }
+        case AuthChangeEvent.signedOut:
+          _ir(_Etapa.login);
+        default:
+          break;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _suscripcion.cancel();
+    super.dispose();
+  }
+
+  void _ir(_Etapa etapa) {
+    if (mounted) setState(() => _etapa = etapa);
+  }
 
   @override
   Widget build(BuildContext context) {
     return switch (_etapa) {
       _Etapa.login => PantallaLogin(
-          alIniciarSesion: () => _ir(_Etapa.bienvenida),
           alIrARegistro: () => _ir(_Etapa.registro),
-          alUsarCuentaExterna: _usarCuentaExterna,
         ),
       _Etapa.registro => PantallaRegistro(
-          alRegistrarse: () => _ir(_Etapa.bienvenida),
           alIrALogin: () => _ir(_Etapa.login),
-          alUsarCuentaExterna: _usarCuentaExterna,
         ),
       _Etapa.bienvenida => PantallaBienvenida(
           alContinuar: () => _ir(_Etapa.guia),

@@ -507,3 +507,48 @@ class EnlaceLumina extends StatelessWidget {
     );
   }
 }
+
+/// Aviso bajo un formulario (error del servidor o confirmación).
+/// Es una "región en vivo": el lector de pantalla lo lee apenas aparece.
+class MensajeFormulario extends StatelessWidget {
+  const MensajeFormulario({super.key, required this.texto, this.exito = false});
+
+  final String texto;
+  final bool exito;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+    final color = exito ? c.success : Theme.of(context).colorScheme.error;
+
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color, width: 2),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              exito ? Icons.mark_email_read : Icons.error_outline,
+              color: color,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                texto,
+                style: estiloTexto(18, FontWeight.w600, c.ink, altura: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

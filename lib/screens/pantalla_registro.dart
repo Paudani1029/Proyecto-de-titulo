@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../logica/validaciones.dart';
+import '../services/cuenta_service.dart';
 import '../theme/lumina_tema.dart';
 import '../widgets/cuentas_externas.dart';
 import '../widgets/lumina_widgets.dart';
 
+/// Igual que el login: al quedar con sesión iniciada, la raíz de la app
+/// detecta el cambio y pasa a la bienvenida.
 class PantallaRegistro extends StatefulWidget {
-  const PantallaRegistro({
-    super.key,
-    required this.alRegistrarse,
-    required this.alIrALogin,
-    required this.alUsarCuentaExterna,
-  });
+  const PantallaRegistro({super.key, required this.alIrALogin});
 
-  final VoidCallback alRegistrarse;
   final VoidCallback alIrALogin;
-  final ValueChanged<ProveedorCuenta> alUsarCuentaExterna;
 
   @override
   State<PantallaRegistro> createState() => _PantallaRegistroState();
@@ -30,6 +26,11 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   // Los errores solo se muestran después de presionar "Crear cuenta",
   // para no regañar al usuario mientras todavía está escribiendo.
   bool _intentoEnviar = false;
+  bool _cargando = false;
+  String? _errorServidor;
+
+  /// Se muestra cuando Supabase pide confirmar el correo antes de entrar.
+  String? _avisoConfirmacion;
 
   bool get _completo =>
       _nombre.text.trim().isNotEmpty &&
@@ -57,10 +58,42 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     super.dispose();
   }
 
-  // Aquí es donde más adelante se conectaría el registro real (Firebase, API...).
-  void _enviar() {
+  Future<void> _enviar() async {
     setState(() => _intentoEnviar = true);
-    if (_completo && _valido) widget.alRegistrarse();
+    if (!_completo || !_valido) return;
+
+    await _conCarga(() async {
+      final conSesion = await CuentaService.registrar(
+        nombre: _nombre.text,
+        correo: _correo.text,
+        clave: _clave.text,
+      );
+      if (!conSesion && mounted) {
+        setState(() {
+          _avisoConfirmacion =
+              'Te enviamos un correo a ${_correo.text.trim()}. '
+              'Ábrelo y toca el enlace para activar tu cuenta.';
+        });
+      }
+    });
+  }
+
+  Future<void> _usarCuentaExterna(ProveedorCuenta proveedor) =>
+      _conCarga(() => CuentaService.iniciarConProveedor(proveedor));
+
+  Future<void> _conCarga(Future<void> Function() accion) async {
+    setState(() {
+      _cargando = true;
+      _errorServidor = null;
+      _avisoConfirmacion = null;
+    });
+    try {
+      await accion();
+    } on ErrorCuenta catch (e) {
+      if (mounted) setState(() => _errorServidor = e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   void _actualizar(String _) => setState(() {});
@@ -100,7 +133,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             const SizedBox(height: 24),
             BotonesCuentaExterna(
               accion: 'Registrarte',
-              alElegir: widget.alUsarCuentaExterna,
+              alElegir: _usarCuentaExterna,
             ),
             const SizedBox(height: 28),
             const SeparadorTexto(texto: 'o completa tus datos'),
@@ -148,10 +181,18 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               error: _intentoEnviar ? _errorRepetir : null,
               alCambiar: _actualizar,
             ),
+            if (_errorServidor != null) ...[
+              const SizedBox(height: 24),
+              MensajeFormulario(texto: _errorServidor!),
+            ],
+            if (_avisoConfirmacion != null) ...[
+              const SizedBox(height: 24),
+              MensajeFormulario(texto: _avisoConfirmacion!, exito: true),
+            ],
             const SizedBox(height: 24),
             BotonPrimario(
-              texto: 'Crear cuenta',
-              onPressed: _completo ? _enviar : null,
+              texto: _cargando ? 'Creando cuenta…' : 'Crear cuenta',
+              onPressed: _completo && !_cargando ? _enviar : null,
             ),
             const SizedBox(height: 16),
             Wrap(

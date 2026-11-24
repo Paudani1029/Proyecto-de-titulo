@@ -3,7 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lumina/main.dart';
 
+import 'ayuda_supabase.dart';
+
 void main() {
+  setUpAll(iniciarSupabaseDePrueba);
+
   testWidgets('El login muestra los botones de Google y Correo',
       (WidgetTester tester) async {
     await tester.pumpWidget(const LuminaApp());

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/aviso_historial.dart';
 import '../services/banco_pruebas.dart';
+import '../services/cuenta_service.dart';
 import '../services/detector_onnx.dart';
 import '../services/pulso_proximidad.dart';
 import '../theme/lumina_tema.dart';
@@ -503,6 +504,97 @@ class _ContenidoAjustes extends StatelessWidget {
 
           // Comparar modelos de detección (herramienta de desarrollo)
           const _TarjetaBanco(),
+          const SizedBox(height: 16),
+
+          // Cuenta
+          const _TarjetaCuenta(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Muestra con qué correo se entró y permite cerrar la sesión.
+class _TarjetaCuenta extends StatefulWidget {
+  const _TarjetaCuenta();
+
+  @override
+  State<_TarjetaCuenta> createState() => _TarjetaCuentaState();
+}
+
+class _TarjetaCuentaState extends State<_TarjetaCuenta> {
+  bool _saliendo = false;
+
+  Future<void> _cerrarSesion() async {
+    setState(() => _saliendo = true);
+    final navegador = Navigator.of(context);
+    final avisos = ScaffoldMessenger.of(context);
+    try {
+      // La raíz de la app escucha el cierre de sesión y vuelve al login.
+      await CuentaService.cerrarSesion();
+      navegador.pop();
+    } on ErrorCuenta catch (e) {
+      avisos.showSnackBar(SnackBar(content: Text(e.mensaje)));
+      if (mounted) setState(() => _saliendo = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+    final colorSalir = Theme.of(context).colorScheme.error;
+    final correo = CuentaService.usuario?.email;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _IconoCaja(Icons.person),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tu cuenta',
+                      style: estiloTexto(20, FontWeight.w800, c.ink),
+                    ),
+                    if (correo != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        correo,
+                        style: estiloTexto(16, FontWeight.w400, c.inkMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _saliendo ? null : _cerrarSesion,
+            icon: const Icon(Icons.logout),
+            label: Text(_saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+              foregroundColor: colorSalir,
+              side: BorderSide(color: colorSalir, width: 2),
+              textStyle: estiloTexto(18, FontWeight.w700, colorSalir),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
         ],
       ),
     );
