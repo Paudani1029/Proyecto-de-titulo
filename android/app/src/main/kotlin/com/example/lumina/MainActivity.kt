@@ -3,6 +3,8 @@ package com.example.lumina
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
@@ -23,6 +25,42 @@ class MainActivity : FlutterActivity() {
                     resultado.notImplemented()
                 }
             }
+
+        // Lumina Cam con red propia (lib/services/red_wifi_local.dart).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lumina/red")
+            .setMethodCallHandler { llamada, resultado ->
+                when (llamada.method) {
+                    "usarWifi" -> resultado.success(usarWifi())
+                    "soltarWifi" -> {
+                        soltarWifi()
+                        resultado.success(null)
+                    }
+                    else -> resultado.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * La red "Lumina-Camara" no tiene internet, así que Android sigue usando los
+     * datos móviles y la app no llega a la cámara (192.168.4.1). Esto hace que
+     * SOLO esta app use el Wi-Fi. El resto del teléfono (y el reconocimiento de
+     * voz de Google) sigue con datos móviles.
+     */
+    @Suppress("DEPRECATION") // allNetworks: simple y funciona en todas las versiones
+    private fun usarWifi(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
+        val conectividad = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val wifi = conectividad.allNetworks.firstOrNull { red ->
+            conectividad.getNetworkCapabilities(red)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        } ?: return false
+        return conectividad.bindProcessToNetwork(wifi)
+    }
+
+    private fun soltarWifi() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val conectividad = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        conectividad.bindProcessToNetwork(null)
     }
 
     private fun leerEstadoTermico(): Map<String, Any?> {

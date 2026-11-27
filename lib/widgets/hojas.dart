@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../logica/asistente.dart';
 import '../models/aviso_historial.dart';
 import '../services/banco_pruebas.dart';
 import '../services/cuenta_service.dart';
 import '../services/detector_onnx.dart';
+import '../services/preferencias_camara.dart';
 import '../services/pulso_proximidad.dart';
 import '../theme/lumina_tema.dart';
 import 'lumina_widgets.dart';
@@ -26,6 +30,7 @@ Future<void> mostrarHojaAjustes(
   BuildContext context, {
   required ValueNotifier<bool> camaraVisible,
   required List<AvisoHistorial> historial,
+  required Asistente asistente,
   required VoidCallback alActivarCamara,
 }) {
   return showModalBottomSheet<void>(
@@ -38,6 +43,7 @@ Future<void> mostrarHojaAjustes(
     builder: (contexto) => _ContenidoAjustes(
       camaraVisible: camaraVisible,
       historial: historial,
+      asistente: asistente,
       alActivarCamara: alActivarCamara,
     ),
   );
@@ -287,11 +293,13 @@ class _ContenidoAjustes extends StatelessWidget {
   const _ContenidoAjustes({
     required this.camaraVisible,
     required this.historial,
+    required this.asistente,
     required this.alActivarCamara,
   });
 
   final ValueNotifier<bool> camaraVisible;
   final List<AvisoHistorial> historial;
+  final Asistente asistente;
   final VoidCallback alActivarCamara;
 
   String _hace(DateTime hora) {
@@ -459,6 +467,10 @@ class _ContenidoAjustes extends StatelessWidget {
               },
             ),
           ),
+          const SizedBox(height: 16),
+
+          // Qué cámara usar: teléfono o Lumina Cam
+          _TarjetaCamara(asistente: asistente),
           const SizedBox(height: 16),
 
           // Vibración al buscar
@@ -750,6 +762,212 @@ class _TarjetaBanco extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Elegir la cámara: la del teléfono o Lumina Cam (XIAO ESP32S3 Sense).
+class _TarjetaCamara extends StatefulWidget {
+  const _TarjetaCamara({required this.asistente});
+
+  final Asistente asistente;
+
+  @override
+  State<_TarjetaCamara> createState() => _TarjetaCamaraState();
+}
+
+class _TarjetaCamaraState extends State<_TarjetaCamara> {
+  final TextEditingController _ip = TextEditingController();
+  String? _errorIp;
+
+  static final RegExp _formatoIp = RegExp(
+    r'^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)$',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _ip.text = ipCamaraEsp32.value ?? '';
+  }
+
+  @override
+  void dispose() {
+    _ip.dispose();
+    super.dispose();
+  }
+
+  void _elegir(bool esp32) {
+    unawaited(widget.asistente.usarCamara(esp32: esp32));
+  }
+
+  void _conectarIpEscrita() {
+    final ip = _ip.text.trim();
+    if (!_formatoIp.hasMatch(ip)) {
+      setState(
+        () => _errorIp = 'Revisa la dirección. Debe verse así: 192.168.4.1',
+      );
+      return;
+    }
+    setState(() => _errorIp = null);
+    ipCamaraEsp32.value = ip;
+    _elegir(true);
+  }
+
+  String _estado(bool prefiereEsp32) {
+    final a = widget.asistente;
+    if (a.cambiandoCamara) {
+      return prefiereEsp32 ? 'Buscando Lumina Cam…' : 'Abriendo la cámara…';
+    }
+    final esp = a.camaraEsp32;
+    if (esp != null) return 'Lumina Cam conectada (${esp.ip}).';
+    if (prefiereEsp32) {
+      return 'No encontré Lumina Cam. Estoy usando la cámara del teléfono.';
+    }
+    return 'Usando la cámara del teléfono.';
+  }
+
+  Widget _opcion(LuminaColors c, String texto, bool valor, bool actual) {
+    final elegido = valor == actual;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: elegido,
+        child: Material(
+          color: elegido ? c.brand : c.surface,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.asistente.cambiandoCamara
+                ? null
+                : () => _elegir(valor),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 56),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: elegido ? c.brand : c.border,
+                  width: 2,
+                ),
+              ),
+              child: Text(
+                texto,
+                textAlign: TextAlign.center,
+                style: estiloTexto(
+                  18,
+                  FontWeight.w800,
+                  elegido ? c.onBrand : c.ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = LuminaColors.of(context);
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([widget.asistente, usarCamaraEsp32]),
+      builder: (context, _) {
+        final prefiereEsp32 = usarCamaraEsp32.value;
+        final sinConectar = prefiereEsp32 &&
+            widget.asistente.camaraEsp32 == null &&
+            !widget.asistente.cambiandoCamara;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: c.surfaceMuted,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: c.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const _IconoCaja(Icons.videocam),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cámara',
+                          style: estiloTexto(20, FontWeight.w800, c.ink),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Elige con qué cámara mira Lumina.',
+                          style: estiloTexto(
+                            16,
+                            FontWeight.w400,
+                            c.inkMuted,
+                            altura: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  _opcion(c, 'Teléfono', false, prefiereEsp32),
+                  const SizedBox(width: 12),
+                  _opcion(c, 'Lumina Cam', true, prefiereEsp32),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _estado(prefiereEsp32),
+                  style: estiloTexto(
+                    16,
+                    FontWeight.w700,
+                    c.inkMuted,
+                    altura: 1.3,
+                  ),
+                ),
+              ),
+              if (sinConectar) ...[
+                const SizedBox(height: 12),
+                BotonPrimario(
+                  texto: 'Buscar de nuevo',
+                  altura: 56,
+                  tamanoTexto: 18,
+                  onPressed: () => _elegir(true),
+                ),
+                const SizedBox(height: 20),
+                CampoLumina(
+                  etiqueta: 'O escribe su dirección IP',
+                  controlador: _ip,
+                  pista: '192.168.4.1',
+                  teclado:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  accionTeclado: TextInputAction.done,
+                  error: _errorIp,
+                ),
+                const SizedBox(height: 12),
+                BotonPrimario(
+                  texto: 'Conectar',
+                  altura: 56,
+                  tamanoTexto: 18,
+                  onPressed: _conectarIpEscrita,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

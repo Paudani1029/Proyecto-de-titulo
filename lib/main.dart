@@ -9,6 +9,7 @@ import 'screens/pantalla_login.dart';
 import 'screens/pantalla_principal.dart';
 import 'screens/pantalla_registro.dart';
 import 'services/cuenta_service.dart';
+import 'services/preferencias_camara.dart';
 import 'services/preferencias_service.dart';
 import 'theme/lumina_tema.dart';
 
@@ -21,6 +22,9 @@ Future<void> main() async {
     url: 'https://evmfhovwvwptrowmdzqw.supabase.co',
     publishableKey: 'sb_publishable_LsG9BEZWOCqo39wqG3sxqw_W6SazSif',
   );
+
+  // Cámara elegida e IP de Lumina Cam (se guardan en este teléfono).
+  await PreferenciasCamara.cargar();
 
   // Si ya había una sesión guardada, trae sus ajustes sin bloquear el inicio.
   unawaited(PreferenciasService.cargar());

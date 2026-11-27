@@ -10,7 +10,9 @@ import '../services/comandos_voz_service.dart';
 import '../services/detector_objetos.dart';
 import '../services/detector_onnx.dart';
 import '../services/fuente_imagen.dart';
+import '../services/fuente_imagen_esp32.dart';
 import '../services/fuente_imagen_telefono.dart';
+import '../services/preferencias_camara.dart';
 import '../services/pulso_proximidad.dart';
 import '../services/voz_service.dart';
 import 'generador_respuestas.dart';
@@ -42,12 +44,14 @@ class Asistente extends ChangeNotifier {
     ComandosVozService? comandos,
     PulsoProximidad? pulso,
   })  : _fuente = fuente ?? FuenteImagenTelefono(),
+        _fuenteFija = fuente != null,
         _pulso = pulso ?? PulsoProximidad(),
         _detector = detector ?? DetectorOnnx(),
         _voz = voz ?? VozService(),
         _comandos = comandos ?? ComandosVozService();
 
-  final FuenteImagen _fuente;
+  FuenteImagen _fuente; // cambia si el usuario elige otra cámara en Ajustes
+  final bool _fuenteFija; // la pasaron al crear el asistente (pruebas)
   final DetectorObjetos _detector;
   final VozService _voz;
   final ComandosVozService _comandos;
@@ -82,6 +86,15 @@ class Asistente extends ChangeNotifier {
     return EstadoAsistente.atento;
   }
 
+  /// Lumina Cam (XIAO ESP32S3 Sense), si es la cámara en uso.
+  FuenteImagenEsp32? get camaraEsp32 {
+    final f = _fuente;
+    return f is FuenteImagenEsp32 ? f : null;
+  }
+
+  /// true mientras se conecta o cambia de cámara.
+  bool get cambiandoCamara => _cambiandoCamara;
+
   /// Para la vista previa (solo existe con la cámara del teléfono).
   CameraController? get controladorCamara {
     final f = _fuente;
@@ -95,6 +108,10 @@ class Asistente extends ChangeNotifier {
   final Map<String, DateTime> _ultimasAlertas = {};
   bool _huboAlerta = false;
   int _libres = 0;
+  bool _bucleIniciado = false;
+  bool _cambiandoCamara = false;
+  int _fotosFallidas = 0; // seguidas; sirve para notar si se cayó la cámara
+  bool _avisoSinConexion = false;
 
   void _notificar() {
     if (_activo) notifyListeners();
@@ -116,6 +133,11 @@ class Asistente extends ChangeNotifier {
   // ------------------------------------------------------------------
 
   Future<void> iniciar() async {
+    if (!_fuenteFija && usarCamaraEsp32.value) {
+      await usarCamara(esp32: true, alIniciar: true);
+      return;
+    }
+
     final ok = await _fuente.conectar();
     if (!_activo) {
       _fuente.desconectar();
@@ -128,7 +150,77 @@ class Asistente extends ChangeNotifier {
     }
     _camaraLista = true;
     _decir('Lumina lista. Toca el círculo para hablarme.');
+    _iniciarBucle();
+  }
+
+  void _iniciarBucle() {
+    if (_bucleIniciado) return;
+    _bucleIniciado = true;
     unawaited(_bucleVigilancia());
+  }
+
+  // ------------------------------------------------------------------
+  // Elegir cámara: la del teléfono o Lumina Cam (XIAO ESP32S3 Sense)
+  // ------------------------------------------------------------------
+
+  /// Cambia de cámara. Si Lumina Cam no responde, sigue con la del teléfono
+  /// (sin cámara la app no sirve, y el usuario podría no notar el problema).
+  /// La preferencia se guarda igual, para volver a intentarlo la próxima vez.
+  Future<void> usarCamara({required bool esp32, bool alIniciar = false}) async {
+    if (_cambiandoCamara || _fuenteFija) return;
+    usarCamaraEsp32.value = esp32;
+
+    _cambiandoCamara = true;
+    _camaraLista = false;
+    _errorCamara = false;
+    _notificar();
+
+    final FuenteImagen nueva = esp32
+        ? FuenteImagenEsp32(
+            ipConocida: ipCamaraEsp32.value,
+            alEncontrar: (ip) => ipCamaraEsp32.value = ip,
+          )
+        : FuenteImagenTelefono();
+    await _reemplazarFuente(nueva);
+
+    var ok = await nueva.conectar();
+    if (!_activo) return;
+
+    String mensaje;
+    if (ok) {
+      mensaje = esp32
+          ? 'Cámara Lumina conectada.'
+          : 'Usando la cámara del teléfono.';
+    } else if (esp32) {
+      mensaje = 'No encontré la cámara Lumina. Revisa que esté encendida y '
+          'conectada al punto de acceso de tu teléfono. '
+          'Mientras tanto uso la cámara del teléfono.';
+      final telefono = FuenteImagenTelefono();
+      await _reemplazarFuente(telefono);
+      ok = await telefono.conectar();
+      if (!_activo) return;
+    } else {
+      mensaje = 'No pude abrir la cámara. Revisa el permiso de la aplicación.';
+    }
+    if (alIniciar && ok) mensaje += ' Lumina lista. Toca el círculo para hablarme.';
+
+    _cambiandoCamara = false;
+    _camaraLista = ok;
+    _errorCamara = !ok;
+    _fotosFallidas = 0;
+    _avisoSinConexion = false;
+    _decir(mensaje);
+    if (ok) _iniciarBucle();
+  }
+
+  /// Cambia la fuente dentro de la cola, así ninguna foto queda a medio tomar.
+  Future<void> _reemplazarFuente(FuenteImagen nueva) async {
+    final anterior = await _enCola(() async {
+      final a = _fuente;
+      _fuente = nueva;
+      return a;
+    });
+    anterior.desconectar();
   }
 
   // ------------------------------------------------------------------
@@ -168,6 +260,7 @@ class Asistente extends ChangeNotifier {
   Future<List<Deteccion>?> _analizar() {
     return _enCola<List<Deteccion>?>(() async {
       final ruta = await _fuente.capturarFoto();
+      _registrarCaptura(ruta != null);
       if (ruta == null) return null;
       try {
         return await _detector.detectar(ruta);
@@ -180,6 +273,28 @@ class Asistente extends ChangeNotifier {
         } catch (_) {}
       }
     });
+  }
+
+  /// Avisa si la cámara deja de mandar fotos (p. ej. Lumina Cam se apagó o quedó
+  /// lejos del teléfono) y también cuando vuelve.
+  void _registrarCaptura(bool ok) {
+    if (!_camaraLista || _cambiandoCamara) return;
+    if (ok) {
+      _fotosFallidas = 0;
+      if (_avisoSinConexion) {
+        _avisoSinConexion = false;
+        _decir('La cámara volvió a conectarse.');
+      }
+      return;
+    }
+    _fotosFallidas++;
+    if (_fotosFallidas == 5 && !_avisoSinConexion) {
+      _avisoSinConexion = true;
+      _decir(camaraEsp32 != null
+          ? 'Perdí la conexión con la cámara Lumina. Revisa que esté encendida '
+              'y cerca del teléfono. Te aviso cuando vuelva.'
+          : 'No puedo tomar fotos con la cámara. Te aviso cuando vuelva.');
+    }
   }
 
   // ------------------------------------------------------------------

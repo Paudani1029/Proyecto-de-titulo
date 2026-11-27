@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 
 import '../logica/asistente.dart';
+import '../services/fuente_imagen_esp32.dart';
 import '../theme/lumina_tema.dart';
 import '../widgets/hojas.dart';
 import '../widgets/lumina_widgets.dart';
@@ -64,6 +66,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       context,
       camaraVisible: _camaraVisible,
       historial: _asistente.historial,
+      asistente: _asistente,
       alActivarCamara: () =>
           _mostrarAnuncio('Cámara visible en la pantalla principal'),
     );
@@ -300,12 +303,17 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   Widget _tarjetaCamara(LuminaColors c) {
     final controlador = _asistente.controladorCamara;
     final listo = controlador != null && controlador.value.isInitialized;
+    final esp32 = _asistente.camaraEsp32;
 
     Widget contenido;
     if (_asistente.errorCamara) {
       contenido = _mensajeCamara(
         'No pudimos abrir la cámara. Revisa el permiso de cámara del dispositivo.',
       );
+    } else if (_asistente.cambiandoCamara) {
+      contenido = _mensajeCamara('Conectando con la cámara...');
+    } else if (esp32 != null) {
+      contenido = _vistaEsp32(esp32);
     } else if (!listo) {
       contenido = _mensajeCamara('Conectando con la cámara...');
     } else {
@@ -326,22 +334,49 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 
   Widget _vistaEnVivo(CameraController controlador) {
+    // "Cover": llena el recuadro recortando lo que sobre
+    return _marcoEnVivo(
+      ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: 100,
+            height: 100 * controlador.value.aspectRatio,
+            child: CameraPreview(controlador),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Lumina Cam no tiene video: se muestra la última foto que mandó por Wi-Fi.
+  Widget _vistaEsp32(FuenteImagenEsp32 camara) {
+    return ValueListenableBuilder<Uint8List?>(
+      valueListenable: camara.ultimaFoto,
+      builder: (context, foto, _) {
+        if (foto == null) {
+          return _mensajeCamara('Esperando la imagen de Lumina Cam...');
+        }
+        return _marcoEnVivo(
+          Image.memory(
+            foto,
+            fit: BoxFit.cover,
+            gaplessPlayback: true, // sin parpadeo entre una foto y otra
+            excludeFromSemantics: true,
+          ),
+          etiqueta: 'Lumina Cam',
+        );
+      },
+    );
+  }
+
+  Widget _marcoEnVivo(Widget imagen, {String etiqueta = 'Cámara en vivo'}) {
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // "Cover": llena el recuadro recortando lo que sobre
-          ClipRect(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: 100,
-                height: 100 * controlador.value.aspectRatio,
-                child: CameraPreview(controlador),
-              ),
-            ),
-          ),
+          imagen,
           Positioned(
             left: 12,
             top: 12,
@@ -364,7 +399,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Cámara en vivo',
+                    etiqueta,
                     style: estiloTexto(14, FontWeight.w800, Colors.white),
                   ),
                 ],
